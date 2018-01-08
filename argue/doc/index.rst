@@ -1,0 +1,19 @@
+=========================
+argue: An Argument Parser
+=========================
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
+   changelog
+   todo
+
+.. include:: README.rst
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`

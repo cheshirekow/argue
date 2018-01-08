@@ -1,0 +1,13 @@
+
+*.pyc
+*.o
+*.so
+
+# unified repo tracking
+.gitu
+
+# qt creator
+*.qtc.*
+
+# cmake builds
+.build
