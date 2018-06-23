@@ -6,6 +6,7 @@
 #   cmake
 #   gcc
 #   g++
+#   libfuse-dev
 #
 # pip install --upgrade pip
 # pip install --user
@@ -13,24 +14,36 @@
 #   autopep8
 #   pylint
 #   sphinx
+#
+#   flask
+#   oauth2client
+#   pygerrit2
+#   sqlalchemy
 
-% : .build/cmake_clang/CMakeCache.txt \
-    .build/cmake_gnu/CMakeCache.txt
+mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
+current_dir := $(notdir $(patsubst %/,%,$(dir $(mkfile_path))))
+
+export PYTHONPATH=$(current_dir)
+
+% : .build/cmake_clang/Makefile \
+    .build/cmake_gnu/Makefile
 	@echo ""
 	@echo "clang-build"
 	@echo "-----------"
-	cd .build/cmake_clang && env -u MAKELEVEL make $@
+	cd .build/cmake_clang && env -u MAKELEVEL $(MAKE) $@
 
 	@echo ""
 	@echo "GNU-build"
 	@echo "-----------"
-	cd .build/cmake_gnu && env -u MAKELEVEL make $@
+	cd .build/cmake_gnu && env -u MAKELEVEL $(MAKE) $@
 
 all:
 
 test: all
 
-.build/cmake_clang/CMakeCache.txt:
+
+
+.build/cmake_clang/Makefile:
 	@echo ""
 	@echo "Configuring clang cmake Build"
 	mkdir -p .build/cmake_clang
@@ -38,13 +51,10 @@ test: all
     && env CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=Debug ../../
 	touch .build/cmake_clang/CMakeCache.txt
 
-.build/cmake_gnu/CMakeCache.txt:
+.build/cmake_gnu/Makefile:
 	@echo ""
 	@echo "Configuring GNU cmake Build"
 	mkdir -p .build/cmake_gnu
 	cd .build/cmake_gnu \
     && env cmake -DCMAKE_BUILD_TYPE=Debug ../../
 	touch .build/cmake_gnu/CMakeCache.txt
-
-
-

@@ -1,4 +1,5 @@
 // Copyright 2018 Josh Bialkowski <josh.bialkowski@gmail.com>
+#include <algorithm>
 #include <cxxabi.h>
 #include <execinfo.h>
 
@@ -202,33 +203,65 @@ ArgType GetArgType(const std::string arg) {
 int Parse(const std::string& str, uint8_t* value) {
   return ParseUnsigned(str, value);
 }
+
 int Parse(const std::string& str, uint16_t* value) {
   return ParseUnsigned(str, value);
 }
+
 int Parse(const std::string& str, uint32_t* value) {
   return ParseUnsigned(str, value);
 }
+
 int Parse(const std::string& str, uint64_t* value) {
   return ParseUnsigned(str, value);
 }
+
 int Parse(const std::string& str, int8_t* value) {
   return ParseSigned(str, value);
 }
+
 int Parse(const std::string& str, int16_t* value) {
   return ParseSigned(str, value);
 }
+
 int Parse(const std::string& str, int32_t* value) {
   return ParseSigned(str, value);
 }
+
 int Parse(const std::string& str, int64_t* value) {
   return ParseSigned(str, value);
 }
+
 int Parse(const std::string& str, float* value) {
   return ParseFloat(str, value);
 }
+
 int Parse(const std::string& str, double* value) {
   return ParseFloat(str, value);
 }
+
+// http://en.cppreference.com/w/cpp/string/byte/tolower
+std::string ToLower(std::string s) {
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  return s;
+}
+
+int Parse(const std::string& str, bool* value) {
+  std::string lower = ToLower(str);
+  if (lower == "true" || lower == "t" || lower == "yes" || lower == "y" ||
+      lower == "on" || lower == "1") {
+    *value = true;
+    return 0;
+  } else if (lower == "false" || lower == "f" || lower == "no" ||
+             lower == "n" || lower == "off" || lower == "0") {
+    *value = false;
+    return 0;
+  } else {
+    return -1;
+  }
+}
+
 int Parse(const std::string& str, std::string* value) {
   *value = str;
   return 0;
@@ -249,7 +282,7 @@ int StringToNargs(const std::string& str) {
   return INVALID_NARGS;
 }
 
-const ColumnSpec kDefaultColumns = {4, 20, 50};
+const ColumnSpec kDefaultColumns = {4, 16, 60};
 
 std::string Repeat(const std::string bit, int n) {
   std::stringstream out;
@@ -282,16 +315,15 @@ std::string Wrap(const std::string text, size_t line_length) {
 }
 
 Parser::Parser(const Metadata& meta) : meta_(meta) {
-  if(!meta.add_help.is_set || meta.add_help.value) {
+  if (!meta.add_help.is_set || meta.add_help.value) {
     this->AddArgument("-h", "--help", nullptr, {.action_ = "help"});
   }
-  if(!meta.add_version.is_set || meta.add_version.value) {
+  if (!meta.add_version.is_set || meta.add_version.value) {
     this->AddArgument("-v", "--version", nullptr, {.action_ = "version"});
   }
 }
 
-int Parser::ParseArgs(int argc, char** argv,
-                      std::ostream* out) {
+int Parser::ParseArgs(int argc, char** argv, std::ostream* out) {
   if (argc > 0) {
     meta_.name = argv[0];
   }
@@ -314,32 +346,37 @@ int Parser::ParseArgs(const std::initializer_list<std::string>& init_list,
   return ParseArgs(&args, out);
 }
 
-int Parser::ParseArgs(std::list<std::string>* args,
-                      std::ostream* out) {
+int Parser::ParseArgs(std::list<std::string>* args, std::ostream* out) {
   try {
     return ParseArgsImpl(args, out);
-  } catch(const BugException& ex) {
+  } catch (const BugException& ex) {
+    (*out) << "BUG: ";
     (*out) << ex.message << "\n";
     (*out) << ex.stack_trace;
     return PARSE_EXCEPTION;
-  } catch(const ConfigException& ex) {
+  } catch (const ConfigException& ex) {
+    (*out) << "BUG: ";
     (*out) << ex.message << "\n";
-    (*out) << ex.stack_trace;
     return PARSE_EXCEPTION;
-  } catch(const InputException& ex) {
+  } catch (const InputException& ex) {
+    (*out) << "Invalid arguments: ";
     (*out) << ex.message << "\n";
     return PARSE_EXCEPTION;
   }
 }
 
 int Parser::ParseArgsImpl(std::list<std::string>* args, std::ostream* out) {
-  ParseContext ctx{.parser = this, .out=out};
+  ParseContext ctx{.parser = this, .out = out};
 
-  std::list<std::shared_ptr<ActionBase>> positionals = positionals_;
+  auto positionals = positionals_;
+  auto short_flags = short_flags_;
+  auto long_flags = long_flags_;
+
   while (args->size() > 0) {
     ArgType arg_type = GetArgType(args->front());
     ActionResult out{
-        .keep_active = false, .code = PARSE_FINISHED,
+        .keep_active = false,
+        .code = PARSE_FINISHED,
     };
 
     switch (arg_type) {
@@ -348,16 +385,18 @@ int Parser::ParseArgsImpl(std::list<std::string>* args, std::ostream* out) {
         args->pop_front();
         for (size_t idx = 1; idx < ctx.arg.size(); ++idx) {
           std::string query_flag = std::string("-") + ctx.arg[idx];
-          auto flag_iter = short_flags_.find(query_flag);
-          ARGUE_ASSERT(INPUT_ERROR, (flag_iter != short_flags_.end())) <<
-            "Unrecognized short flag: " << query_flag;
+          auto flag_iter = short_flags.find(query_flag);
+          ARGUE_ASSERT(INPUT_ERROR, (flag_iter != short_flags.end()))
+              << "Unrecognized short flag: " << query_flag;
           FlagStore store = flag_iter->second;
-          ARGUE_ASSERT(BUG, bool(store.action)) << "Flag " << query_flag << " was found in index with empty action pointer";
+          ARGUE_ASSERT(BUG, bool(store.action))
+              << "Flag " << query_flag
+              << " was found in index with empty action pointer";
           (*store.action)(ctx, args, &out);
 
           if (!out.keep_active) {
-            short_flags_.erase(store.short_flag);
-            long_flags_.erase(store.long_flag);
+            short_flags.erase(store.short_flag);
+            long_flags.erase(store.long_flag);
           }
         }
         break;
@@ -366,27 +405,31 @@ int Parser::ParseArgsImpl(std::list<std::string>* args, std::ostream* out) {
       case LONG_FLAG: {
         ctx.arg = args->front();
         args->pop_front();
-        auto flag_iter = long_flags_.find(ctx.arg);
-        ARGUE_ASSERT(INPUT_ERROR, (flag_iter != long_flags_.end())) <<
-            "Unrecognized long flag: " << ctx.arg;
+        auto flag_iter = long_flags.find(ctx.arg);
+        ARGUE_ASSERT(INPUT_ERROR, (flag_iter != long_flags.end()))
+            << "Unrecognized long flag: " << ctx.arg;
         FlagStore store = flag_iter->second;
-        ARGUE_ASSERT(BUG, bool(store.action)) << "Flag " << ctx.arg << " was found in index with empty action pointer";
+        ARGUE_ASSERT(BUG, bool(store.action))
+            << "Flag " << ctx.arg
+            << " was found in index with empty action pointer";
         (*store.action)(ctx, args, &out);
         if (!out.keep_active) {
-          short_flags_.erase(store.short_flag);
-          long_flags_.erase(store.long_flag);
+          short_flags.erase(store.short_flag);
+          long_flags.erase(store.long_flag);
         }
         break;
       }
 
       case POSITIONAL: {
         ctx.arg = "";
-        if (positionals.size() < 1) {
-          return PARSE_EXCEPTION;
-        }
+        ARGUE_ASSERT(CONFIG_ERROR, positionals.size() > 0)
+            << "Additional positional arguments with no available actions "
+               "remaining: '"
+            << args->front() << "'";
         std::shared_ptr<ActionBase> action = positionals.front();
         positionals.pop_front();
-        ARGUE_ASSERT(BUG, bool(action)) << "positional with empty action pointer";
+        ARGUE_ASSERT(BUG, bool(action))
+            << "positional with empty action pointer";
         (*action)(ctx, args, &out);
         break;
       }
@@ -398,23 +441,22 @@ int Parser::ParseArgsImpl(std::list<std::string>* args, std::ostream* out) {
   }
 
   for (const std::shared_ptr<ActionBase>& action : positionals) {
-    if (action->IsRequired()) {
-      return PARSE_EXCEPTION;
-    }
+    ARGUE_ASSERT(INPUT_ERROR, !action->IsRequired())
+        << "Missing required positional";
   }
 
   for (const auto& pair : short_flags_) {
     const FlagStore& store = pair.second;
-    if (store.action->IsRequired()) {
-      return PARSE_EXCEPTION;
-    }
+    ARGUE_ASSERT(INPUT_ERROR, !store.action->IsRequired())
+        << "Missing required flag (" << store.short_flag << ","
+        << store.long_flag << ")";
   }
 
   for (const auto& pair : long_flags_) {
     const FlagStore& store = pair.second;
-    if (store.action->IsRequired()) {
-      return PARSE_EXCEPTION;
-    }
+    ARGUE_ASSERT(INPUT_ERROR, !store.action->IsRequired())
+        << "Missing required flag (" << store.short_flag << ","
+        << store.long_flag << ")";
   }
 
   return PARSE_FINISHED;
@@ -435,33 +477,41 @@ void Parser::PrintUsage(std::ostream* out, size_t width) {
   (*out) << Join(parts, " ") << "\n";
 }
 
-void Parser::PrintHelp(std::ostream* out, const ColumnSpec& columns) {
+void Parser::PrintHelp(std::ostream* out, const HelpOptions& opts) {
+  const ColumnSpec columns = opts.columns;
   size_t width = 80;
   size_t padding = (width - ContainerSum(columns)) / (columns.size() - 1);
 
   // TODO(josh): detect multiline and break it up
-  (*out) << meta_.name << "\n" << Repeat("-", 20) << "\n";
+  if (opts.depth < 1) {
+    (*out) << meta_.name << "\n" << Repeat("=", 20) << "\n";
 
-  if (meta_.version.size() > 0) {
-    (*out) << "  version: " << Join(meta_.version, ".") << "\n";
-  }
-  if (meta_.author.size() > 0) {
-    (*out) << "  author : " << meta_.author << "\n";
-  }
-  if (meta_.copyright.size() > 0) {
-    (*out) << "  copyright: " << meta_.copyright << "\n";
+    if (meta_.version.size() > 0) {
+      (*out) << "version: " << Join(meta_.version, ".") << "\n";
+    }
+    if (meta_.author.size() > 0) {
+      (*out) << "author : " << meta_.author << "\n";
+    }
+    if (meta_.copyright.size() > 0) {
+      (*out) << "copyright: " << meta_.copyright << "\n";
+    }
+    (*out) << "\n";
   }
 
-  (*out) << "\n";
   PrintUsage(out, width);
 
   if (meta_.prolog.size() > 0) {
-    (*out) << meta_.prolog;
+    (*out) << "\n" << meta_.prolog << "\n";
   }
 
   if (flag_help_.size() > 0) {
-    (*out) << "\n";
-    (*out) << "Flags:\n" << Repeat("-", 20) << "\n";
+    if (opts.depth < 1) {
+      (*out) << "\n";
+      (*out) << "Flags:\n";
+      (*out) << Repeat("-", 6) << "\n";
+    } else {
+      (*out) << Repeat("-", 4) << "\n";
+    }
     for (const FlagHelp& help : flag_help_) {
       (*out) << help.short_flag;
       (*out) << Repeat(" ", padding + columns[0] - help.short_flag.size());
@@ -490,8 +540,13 @@ void Parser::PrintHelp(std::ostream* out, const ColumnSpec& columns) {
   }
 
   if (positional_help_.size() > 0) {
-    (*out) << "\n";
-    (*out) << "Positionals:\n" << Repeat("-", 20) << "\n";
+    if (opts.depth < 1) {
+      (*out) << "\n";
+      (*out) << "Positionals:\n";
+      (*out) << Repeat("-", 12) << "\n";
+    } else {
+      (*out) << Repeat("-", 4) << "\n";
+    }
     for (const PositionalHelp& help : positional_help_) {
       (*out) << help.name;
       (*out) << Repeat(
@@ -517,6 +572,17 @@ void Parser::PrintHelp(std::ostream* out, const ColumnSpec& columns) {
     }
   }
 
+  if (opts.depth < 1 && subcommand_help_.size() > 0) {
+    (*out) << "\n";
+    (*out) << "Subcommands:\n" << Repeat("=", 10) << "\n";
+    for (const auto& sub : subcommand_help_) {
+      for (auto& pair : *sub) {
+        (*out) << "\nSubcommand `" << pair.first << "`\n";
+        pair.second->PrintHelp(out, {columns, opts.depth + 1});
+      }
+    }
+  }
+
   if (meta_.epilog.size() > 0) {
     (*out) << meta_.epilog;
   }
@@ -533,5 +599,55 @@ void Parser::PrintVersion(std::ostream* out, const ColumnSpec& columns) {
 // TODO(josh): this shouldn't be needed, and isn't for clang
 template class Optional<bool>;
 
+std::shared_ptr<Parser> Subparsers::AddParser(const std::string& command,
+                                              const SubparserOptions& opts) {
+  auto iter = subparser_map_.find(command);
+  if (iter == subparser_map_.end()) {
+    Metadata meta{};
+    meta.add_help = true;
+    meta.add_version = false;
+    meta.name = command;
+    meta.prolog = opts.help_;
+    std::shared_ptr<Parser> parser{new Parser{meta}};
+    std::tie(iter, std::ignore) =
+        subparser_map_.emplace(std::make_pair(command, parser));
+  }
+
+  return iter->second;
+}
+
+void Subparsers::operator()(const ParseContext& ctx,
+                            std::list<std::string>* args,
+                            ActionResult* result) {
+  ARGUE_ASSERT(CONFIG_ERROR, this->nargs_ == EXACTLY_ONE, "Invalid nargs_=%d",
+               this->nargs_);
+  ArgType arg_type = GetArgType(args->front());
+
+  if (arg_type == POSITIONAL) {
+    std::string local_command;
+    std::string* dest = this->dest_;
+    if (!dest) {
+      dest = &local_command;
+    }
+
+    int parse_result = Parse(args->front(), dest);
+    ARGUE_ASSERT(INPUT_ERROR, parse_result == 0)
+        << "Unable to parse command '" << args->front() << "'";
+    args->pop_front();
+
+    auto iter = subparser_map_.find(*dest);
+    ARGUE_ASSERT(INPUT_ERROR, iter != subparser_map_.end())
+        << "Invalid value '" << args->front() << "' choose from '"
+        << Join(Keys(subparser_map_), "', '") << "'";
+
+    std::shared_ptr<Parser> subparser = iter->second;
+    result->code =
+        static_cast<ParseResult>(subparser->ParseArgsImpl(args, ctx.out));
+  } else {
+    ARGUE_ASSERT(INPUT_ERROR, false,
+                 "Expected a command name but instead got a flag %s",
+                 ctx.arg.c_str());
+  }
+}
 
 }  // namespace argue

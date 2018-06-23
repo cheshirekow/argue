@@ -1,15 +1,10 @@
-=========================
-argue: An Argument Parser
-=========================
+.. include:: README.rst
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
    changelog
    todo
-
-.. include:: README.rst
 
 Indices and tables
 ==================

@@ -4,7 +4,6 @@ add_test(NAME argue-parse_test
          COMMAND argue-parse_test
          WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-
 add_executable(argue-arg_test arg_test.cc)
 target_link_libraries(argue-arg_test argue gtest gtest_main)
 add_test(NAME argue-arg_test

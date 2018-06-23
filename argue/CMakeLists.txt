@@ -1,8 +1,6 @@
-set(argue_headers
-    argue.h)
+set(argue_headers argue.h)
 
-set(argue_sources
-    argue.cc)
+set(argue_sources argue.cc)
 
 set(argue_files
     ${argue_headers}
@@ -19,6 +17,8 @@ target_link_libraries(argue-demo argue)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/argue_format.stamp
                    COMMAND clang-format -style file -i ${argue_files}
+                   COMMAND python -Bm cmake_format -i CMakeLists.txt
+                           doc/CMakeLists.txt test/CMakeLists.txt
                    COMMAND touch ${CMAKE_CURRENT_BINARY_DIR}/argue_format.stamp
                    DEPENDS ${argue_files}
                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

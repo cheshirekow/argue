@@ -1,9 +1,10 @@
-==================================
-argue: An argument parsing library
-==================================
+=====
+argue
+=====
 
-The API tries to closely mimic that of python's argparse. For instance the
-simple demo from the argparse documentation is replicated in c++ with.
+``argue`` is an argument parsing library for C++. The API tries to closely
+mimic that of python's ``argparse``. For instance the simple demo from the
+argparse documentation is replicated in C++ with.
 
 .. code:: c++
 

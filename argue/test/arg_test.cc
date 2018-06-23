@@ -264,3 +264,78 @@ TEST(VersionTest, VersionIsDefault) {
   ResetParser(&parser, {.add_help = true, .add_version = false});
   EXPECT_EQ(argue::PARSE_EXCEPTION, parser.ParseArgs({"-v"}, &logout));
 }
+
+struct TestOpts {
+  std::string command;
+  std::string foo;
+
+  struct {
+    std::string a;
+    std::string b;
+  } bar;
+
+  struct {
+    std::string c;
+    std::string d;
+  } baz;
+};
+
+TEST(SubparserTest, SubparsersWork) {
+  TestOpts opts;
+
+  std::stringstream logout;
+  argue::Parser parser;
+  ResetParser(&parser);
+  parser.AddArgument("-f", "--foo", &opts.foo, {});
+  auto subparsers = parser.AddSubparsers("command", &opts.command);
+  ASSERT_NE(nullptr, subparsers.get());
+  auto bar_parser = subparsers->AddParser("bar");
+  ASSERT_NE(nullptr, bar_parser.get());
+  bar_parser->AddArgument("-a", &opts.bar.a);
+  bar_parser->AddArgument("-b", &opts.bar.b);
+  auto baz_parser = subparsers->AddParser("baz");
+  ASSERT_NE(nullptr, baz_parser.get());
+  baz_parser->AddArgument("-c", &opts.baz.c);
+  baz_parser->AddArgument("-d", &opts.baz.d);
+
+  ASSERT_EQ(argue::PARSE_FINISHED, parser.ParseArgs({"bar"}, &logout))
+      << logout.str();
+  EXPECT_EQ("bar", opts.command);
+
+  logout.str("");
+  ASSERT_EQ(argue::PARSE_FINISHED,
+            parser.ParseArgs({"bar", "-a", "hello", "-b", "world"}, &logout))
+      << logout.str();
+  EXPECT_EQ("bar", opts.command);
+  EXPECT_EQ("hello", opts.bar.a);
+  EXPECT_EQ("world", opts.bar.b);
+
+  logout.str("");
+  ASSERT_EQ(argue::PARSE_EXCEPTION,
+            parser.ParseArgs({"bar", "-c", "hello"}, &logout))
+      << logout.str();
+
+  logout.str("");
+  ASSERT_EQ(argue::PARSE_FINISHED, parser.ParseArgs({"baz"}, &logout))
+      << logout.str();
+
+  logout.str("");
+  ASSERT_EQ(argue::PARSE_FINISHED,
+            parser.ParseArgs({"baz", "-c", "hello", "-d", "world"}, &logout))
+      << logout.str();
+  EXPECT_EQ("baz", opts.command);
+  EXPECT_EQ("hello", opts.baz.c);
+  EXPECT_EQ("world", opts.baz.d);
+
+  logout.str("");
+  ASSERT_EQ(argue::PARSE_EXCEPTION,
+            parser.ParseArgs({"baz", "-a", "-b"}, &logout))
+      << logout.str();
+
+  logout.str("");
+  ASSERT_EQ(
+      argue::PARSE_FINISHED,
+      parser.ParseArgs({"--foo", "hello", "bar", "-a", "hello", "-b", "world"},
+                       &logout))
+      << logout.str();
+}

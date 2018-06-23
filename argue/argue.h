@@ -26,6 +26,7 @@ using conditional_t = typename conditional<B, T, F>::type;
 
 }  // namespace std
 
+// An command line argument parsing library
 namespace argue {
 
 template <typename T, typename _ = void>
@@ -34,8 +35,8 @@ struct is_container : std::false_type {};
 template <typename... Ts>
 struct is_container_helper {};
 
-/// Metaprogram resolves true if T is a container-like class, or false if it
-/// is not.
+// Metaprogram resolves true if T is a container-like class, or false if it
+// is not.
 template <typename T>
 struct is_container<
     T, std::conditional_t<
@@ -75,7 +76,6 @@ struct get_choice_type {
 // storage.
 struct NoneType {};
 extern const NoneType kNone;
-
 std::ostream& operator<<(std::ostream& out, NoneType none);
 
 // NoneType isn't really ordered, but we want them to be storable in a set
@@ -207,7 +207,7 @@ void operator&&(const argue::AssertionSentinel& sentinel,
                 const argue::Assertion& assertion);
 
 // Evaluate an assertion (boolean expression) and if false throw an exception
-// Usage is if there were overloads with the following signatures:
+// Usage is as if there were overloads with the following signatures:
 //
 // ostream& ARGUE_ASSERT(ExceptionClass class, bool expr);
 // ostream& ARGUE_ASSERT(ExceptionClass class, bool expr,
@@ -336,6 +336,7 @@ int Parse(const std::string& str, int32_t* value);
 int Parse(const std::string& str, int64_t* value);
 int Parse(const std::string& str, float* value);
 int Parse(const std::string& str, double* value);
+int Parse(const std::string& str, bool* value);
 int Parse(const std::string& str, std::string* value);
 int Parse(const std::string& str, NoneType* dummy);
 
@@ -356,12 +357,24 @@ struct Optional {
       : is_set(true),
         value(value) {}
 
+  template <typename U>
+  Optional(const U& value)  // NOLINT(runtime/explicit)
+      : is_set(true),
+        value(value) {}
+
   Optional& operator=(const NoneType&) {
     is_set = false;
     return *this;
   }
 
   Optional& operator=(const T& value) {
+    is_set = true;
+    this->value = value;
+    return *this;
+  }
+
+  template <typename U>
+  Optional& operator=(const U& value) {
     is_set = true;
     this->value = value;
     return *this;
@@ -376,9 +389,7 @@ struct Optional {
 template <>
 struct Optional<NoneType> {
   Optional() : is_set(false) {}
-
   explicit Optional(const NoneType&) : is_set(false) {}
-
   Optional& operator=(const NoneType&) {
     return *this;
   }
@@ -402,6 +413,7 @@ ArgType GetArgType(const std::string arg);
 
 // Sentinel integer values used to indicate special `nargs`.
 enum SentinelNargs {
+  ZERO_NARGS = -6,
   INVALID_NARGS = -5,
   ONE_OR_MORE = -4,
   ZERO_OR_MORE = -3,
@@ -420,6 +432,9 @@ struct Nargs {
 
   Nargs(int value)  // NOLINT(runtime/explicit)
       : value(value) {}
+
+  Nargs(char value)  // NOLINT(runtime/explicit)
+      : value(StringToNargs(std::string(&value, 1))) {}
 
   Nargs(const std::string& str)  // NOLINT(runtime/explicit)
       : value(StringToNargs(str)) {}
@@ -605,7 +620,7 @@ class StoreImpl<T, /*is_container=*/true> : public StoreImplBase<T> {
 template <typename T>
 class Store : public StoreImpl<T, is_container<T>::value> {};
 
-// Implements the "store_const" action. This deafult template is for types that
+// Implements the "store_const" action. This default template is for types that
 // are not containers (i.e. Scalars)
 template <typename T, bool is_container>
 class StoreConstImpl : public Action<T> {
@@ -634,7 +649,7 @@ class StoreConstImpl : public Action<T> {
     *dest_ = const_;
   }
 
- private:
+ protected:
   T* dest_;
   T const_;
 };
@@ -662,10 +677,53 @@ class StoreConstImpl<T, /*is_container=*/true> : public Action<T> {
 template <typename T>
 class StoreConst : public StoreConstImpl<T, is_container<T>::value> {};
 
+class StoreTrue : public StoreConst<bool> {
+ public:
+  void Prep(const BaseOptions<bool>& spec) override {
+    ARGUE_ASSERT(CONFIG_ERROR, spec.dest_,
+                 "dest_= is required for action_='store_true'");
+    ARGUE_ASSERT(CONFIG_ERROR, !spec.const_.is_set,
+                 "const_ may not be set for action_='store_true'");
+    ARGUE_ASSERT(CONFIG_ERROR, !spec.default_.is_set,
+                 "default_ may not be set for action_='store_true'");
+    ARGUE_ASSERT(CONFIG_ERROR, !spec.required_,
+                 "required_ may not be true for action_='store_true'");
+    // ARGUE_ASSERT(spec.default_.is_set)
+    // << "default_= is required for action_='store_true'";
+
+    this->dest_ = spec.dest_;
+    this->const_ = true;
+    this->required_ = false;
+    *dest_ = false;
+  }
+};
+
+class StoreFalse : public StoreConst<bool> {
+ public:
+  void Prep(const BaseOptions<bool>& spec) override {
+    ARGUE_ASSERT(CONFIG_ERROR, spec.dest_,
+                 "dest_= is required for action_='store_false'");
+    ARGUE_ASSERT(CONFIG_ERROR, !spec.const_.is_set,
+                 "const_ may not be set for action_='store_false'");
+    ARGUE_ASSERT(CONFIG_ERROR, !spec.default_.is_set,
+                 "default_ may not be set for action_='store_false'");
+    ARGUE_ASSERT(CONFIG_ERROR, !spec.required_,
+                 "required_ may not be true for action_='store_false'");
+    // ARGUE_ASSERT(spec.default_.is_set)
+    // << "default_= is required for action_='store_false'";
+
+    this->dest_ = spec.dest_;
+    this->const_ = false;
+    this->required_ = false;
+    *dest_ = true;
+  }
+};
+
 // Implements the "help" action, which prints help text and terminates the
 // parse loop.
 template <typename T>
 class Help : public Action<T> {
+ public:
   std::string GetHelp() override {
     return "print this help message";
   }
@@ -679,6 +737,7 @@ class Help : public Action<T> {
 // the parse loop.
 template <typename T>
 class Version : public Action<T> {
+ public:
   std::string GetHelp() override {
     return "print version information and exit";
   }
@@ -686,6 +745,33 @@ class Version : public Action<T> {
   void Prep(const BaseOptions<T>& spec) override {}
   void operator()(const ParseContext& ctx, std::list<std::string>* args,
                   ActionResult* result) override;
+};
+
+// Options specific to subparsers
+struct SubparserOptions {
+  std::string help_;
+};
+
+// Implements the subparser action, which dispatches another parser
+class Subparsers : public StoreImpl<std::string, false> {
+ public:
+  typedef std::map<std::string, std::shared_ptr<Parser>> MapType;
+
+  std::shared_ptr<Parser> AddParser(const std::string& command,
+                                    const SubparserOptions& opts = {});
+  void operator()(const ParseContext& ctx, std::list<std::string>* args,
+                  ActionResult* result) override;
+
+  MapType::const_iterator begin() const {
+    return subparser_map_.begin();
+  }
+
+  MapType::const_iterator end() const {
+    return subparser_map_.end();
+  }
+
+ private:
+  MapType subparser_map_;
 };
 
 // Basically just a std::shared_ptr<Action<T>> but has additional constructors
@@ -732,6 +818,58 @@ struct ActionHolder : std::shared_ptr<Action<T>> {
 
   ActionHolder<T>& operator=(const std::shared_ptr<Action<T>>& other) {
     this->std::shared_ptr<Action<T>>::operator=(other);
+    return *this;
+  }
+};
+
+template <>
+struct ActionHolder<bool> : std::shared_ptr<Action<bool>> {
+  void Interpret(const std::string& name) {
+    if (name == "store") {
+      *this = std::make_shared<Store<bool>>();
+    } else if (name == "store_const") {
+      *this = std::make_shared<StoreConst<bool>>();
+    } else if (name == "store_true") {
+      *this = std::make_shared<StoreTrue>();
+    } else if (name == "store_false") {
+      *this = std::make_shared<StoreFalse>();
+    } else if (name == "help") {
+      *this = std::make_shared<Help<bool>>();
+    } else if (name == "version") {
+      *this = std::make_shared<Version<bool>>();
+    } else {
+      ARGUE_ASSERT(CONFIG_ERROR, false, "unrecognized action_='&s'",
+                   name.c_str());
+    }
+  }
+
+  // TODO(josh): de-duplicate with above.
+  ActionHolder()
+      : std::shared_ptr<Action<bool>>(std::make_shared<Store<bool>>()) {}
+
+  ActionHolder(const std::string& name) {  // NOLINT(runtime/explicit)
+    Interpret(name);
+  }
+
+  ActionHolder(const char* name) {  // NOLINT(runtime/explicit)
+    Interpret(name);
+  }
+
+  explicit ActionHolder(const std::shared_ptr<Action<bool>>& other)
+      : std::shared_ptr<Action<bool>>(other) {}
+
+  ActionHolder<bool>& operator=(const std::string& name) {
+    Interpret(name);
+    return *this;
+  }
+
+  ActionHolder<bool>& operator=(const char* name) {
+    Interpret(name);
+    return *this;
+  }
+
+  ActionHolder<bool>& operator=(const std::shared_ptr<Action<bool>>& other) {
+    this->std::shared_ptr<Action<bool>>::operator=(other);
     return *this;
   }
 };
@@ -791,6 +929,16 @@ std::string Join(const Container& container, const std::string& delim = ", ") {
     out << delim << *(iter++);
   }
   return out.str();
+}
+
+template <typename Container>
+std::vector<typename Container::key_type> Keys(const Container& container) {
+  std::vector<typename Container::key_type> out;
+  out.reserve(container.size());
+  for (auto& pair : container) {
+    out.emplace_back(pair.first);
+  }
+  return std::move(out);
 }
 
 // Create a string formed by repeating `bit` for `n` times.
@@ -915,7 +1063,7 @@ class Parser {
   // Add a flag argument with the given short and log flag names
   template <typename T>
   void AddArgument(const std::string& short_flag, const std::string& long_flag,
-                   T* dest, const CommonOptions<T>& spec) {
+                   T* dest, const CommonOptions<T>& spec = CommonOptions<T>{}) {
     ARGUE_ASSERT(CONFIG_ERROR, short_flag.size() > 0 || long_flag.size() > 0,
                  "Cannot AddArgument with both short_flag='' and long_flag=''");
     BaseOptions<T> base_spec = ConvertOptions(spec);
@@ -960,7 +1108,7 @@ class Parser {
 
   // For things like help/version which don't need arguments
   void AddArgument(const std::string& short_flag, const std::string& long_flag,
-                   std::nullptr_t, const CommonOptions<NoneType>& spec) {
+                   std::nullptr_t, const CommonOptions<NoneType>& spec = {}) {
     AddArgument<NoneType>(short_flag, long_flag, nullptr, spec);
   }
 
@@ -968,7 +1116,7 @@ class Parser {
   // or a long flag but not both.
   template <typename T>
   void AddArgument(const std::string& name_or_flag, T* dest,
-                   const CommonOptions<T>& spec) {
+                   const CommonOptions<T>& spec = CommonOptions<T>{}) {
     ARGUE_ASSERT(CONFIG_ERROR, name_or_flag.size() > 0,
                  "Cannot AddArgument with empty name_or_flag string");
     BaseOptions<T> base_spec = ConvertOptions(spec);
@@ -1011,22 +1159,59 @@ class Parser {
     }
   }
 
+  std::shared_ptr<Subparsers> AddSubparsers(const std::string& name,
+                                            std::string* dest,
+                                            const SubparserOptions& opts = {}) {
+    std::shared_ptr<Subparsers> subparsers = std::make_shared<Subparsers>();
+    BaseOptions<std::string> spec{};
+    spec.nargs_ = EXACTLY_ONE;
+    spec.required_ = true;
+    spec.help_ = opts.help_;
+    spec.dest_ = dest;
+    spec.metavar_ = name;
+    subparsers->Prep(spec);
+    positionals_.emplace_back(subparsers);
+
+    PositionalHelp help{
+        .name = name,
+        .help_text = subparsers->GetHelp(),
+        .usage_text = subparsers->GetUsage(),
+    };
+
+    if (!help.help_text.size()) {
+      help.help_text = opts.help_;
+    }
+
+    if (!help.usage_text.size()) {
+      help.usage_text = GetPositionalUsage(name, spec);
+    }
+
+    positional_help_.emplace_back(help);
+    subcommand_help_.emplace_back(subparsers);
+    return subparsers;
+  }
+
   int ParseArgs(int argc, char** argv, std::ostream* log = &std::cerr);
   int ParseArgs(const std::initializer_list<std::string>& init_list,
                 std::ostream* log = &std::cerr);
   int ParseArgs(std::list<std::string>* args, std::ostream* log = &std::cerr);
   void PrintUsage(std::ostream* out, size_t width = 80);
 
+  struct HelpOptions {
+    ColumnSpec columns;
+    int depth;
+  };
+
   // TODO(josh): don't use ostream in the main library, make it an include
   // option
   void PrintHelp(std::ostream* out,
-                 const ColumnSpec& columns = kDefaultColumns);
+                 const HelpOptions& opts = {kDefaultColumns, 0});
   void PrintVersion(std::ostream* out,
                     const ColumnSpec& columns = kDefaultColumns);
 
- private:
   int ParseArgsImpl(std::list<std::string>* args, std::ostream* out);
 
+ private:
   Metadata meta_;
   std::map<std::string, FlagStore> short_flags_;
   std::map<std::string, FlagStore> long_flags_;
@@ -1034,6 +1219,7 @@ class Parser {
 
   std::list<FlagHelp> flag_help_;
   std::list<PositionalHelp> positional_help_;
+  std::list<std::shared_ptr<Subparsers>> subcommand_help_;
 };
 
 template <typename T, bool is_container>
@@ -1042,7 +1228,7 @@ void StoreImpl<T, is_container>::operator()(const ParseContext& ctx,
                                             ActionResult* result) {
   ARGUE_ASSERT(CONFIG_ERROR,
                this->nargs_ == ZERO_OR_ONE || this->nargs_ == EXACTLY_ONE,
-               "Invalid nargs_=%d", this->nargs_);
+               "Invalid nargs_=%d for non container", this->nargs_);
   ArgType arg_type = GetArgType(args->front());
 
   if (arg_type == POSITIONAL) {
@@ -1092,10 +1278,10 @@ void StoreImpl<T, /*is_container=*/true>::operator()(
       break;
     }
 
-    if (Parse(args->front(), &temp)) {
-      result->code = PARSE_EXCEPTION;
-      return;
-    }
+    int result = Parse(args->front(), &temp);
+    ARGUE_ASSERT(INPUT_ERROR, result == 0) << "Failed to parse '"
+                                           << args->front();
+
     this->dest_->emplace_back(temp);
     if (choices_.size() > 0) {
       ARGUE_ASSERT(INPUT_ERROR, choices_.find(temp) != choices_.end())
@@ -1105,11 +1291,11 @@ void StoreImpl<T, /*is_container=*/true>::operator()(
     args->pop_front();
   }
 
-  if (min_args <= nargs && nargs <= max_args) {
-    result->code = PARSE_FINISHED;
-  } else {
-    result->code = PARSE_EXCEPTION;
-  }
+  ARGUE_ASSERT(INPUT_ERROR, min_args <= nargs && nargs <= max_args)
+      << "Invalid nargs for '" << ctx.arg << "': " << min_args << " < " << nargs
+      << " < " << max_args;
+
+  result->code = PARSE_FINISHED;
 }
 
 template <typename T>
