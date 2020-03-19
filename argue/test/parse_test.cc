@@ -6,6 +6,9 @@
 // NOTE(josh): test templates will overflow when instanciated, but codepath is
 // disabled in runtime.
 #pragma GCC diagnostic ignored "-Woverflow"
+#if __clang__
+#pragma clang diagnostic ignored "-Wconstant-conversion"
+#endif
 
 #define EXPECT_PARSE(QUERY, VALUE) this->ExpectParse(QUERY, VALUE, __LINE__)
 
@@ -15,7 +18,7 @@ class ParseTest : public ::testing::Test {
   void ExpectParse(const std::string& query, const T expect_value,
                    int line_no) {
     T value = 0;
-    argue::Parse(query, &value);
+    argue::parse(query, &value);
     EXPECT_EQ(expect_value, value) << __FILE__ << ":" << line_no;
   }
 };

@@ -1,0 +1,12 @@
+clang-format-8
+clang-tidy-8
+doxygen
+libargue-dev
+libeigen3-dev
+libgoogle-glog-dev
+libloki-dev
+libmagic-dev
+libtangent-util-dev
+ninja-build
+pandoc
+pkg-config

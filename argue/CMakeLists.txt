@@ -1,42 +1,96 @@
-set(argue_headers argue.h)
+set(_headers
+    argue.h
+    action.h
+    action.tcc
+    exception.h
+    glog.h
+    keywords.h
+    keywords.tcc
+    kwargs.h
+    kwargs.tcc
+    parse.h
+    parse.tcc
+    parser.h
+    parser.tcc
+    storage_model.h
+    storage_model.tcc
+    util.h)
+set(_sources action.cc exception.cc kwargs.cc parse.cc parser.cc glog.cc)
 
-set(argue_sources argue.cc)
+get_version_from_header(argue.h ARGUE_VERSION)
 
-set(argue_files
-    ${argue_headers}
-    ${aruge_sources}
-    demo.cc
-    test/arg_test.cc
-    test/assert_test.cc
-    test/parse_test.cc
-    test/util_test.cc)
+cc_library(
+  argue STATIC
+  SRCS ${_sources}
+  DEPS fmt::fmt tangent::json tangent::util
+  PKGDEPS libglog
+  PROPERTIES EXPORT_NAME
+  static INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:include>")
+add_library(argue::static ALIAS argue)
 
-add_library(argue STATIC ${argue_sources})
-add_executable(argue-demo demo.cc)
-target_link_libraries(argue-demo argue)
+cc_library(
+  argue-shared SHARED
+  SRCS ${_sources}
+  DEPS fmt::fmt tangent::json-shared tangent::util-shared
+  PKGDEPS libglog
+  PROPERTIES LIBRARY_OUTPUT_NAME argue
+             VERSION "${ARGUE_API_VERSION}"
+             SOVERSION "${ARGUE_SO_VERSION}"
+             EXPORT_NAME shared
+             INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:include>")
+add_library(argue::shared ALIAS argue-shared)
 
-add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/argue_format.stamp
-                   COMMAND clang-format -style file -i ${argue_files}
-                   COMMAND python -Bm cmake_format -i CMakeLists.txt
-                           doc/CMakeLists.txt test/CMakeLists.txt
-                   COMMAND touch ${CMAKE_CURRENT_BINARY_DIR}/argue_format.stamp
-                   DEPENDS ${argue_files}
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-add_custom_target(argue_format
-                  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/argue_format.stamp)
-add_dependencies(format argue_format)
+cc_binary(
+  argue-can-complete
+  SRCS can_complete.cc
+  DEPS argue loki
+  PKGDEPS libelf
+  PROPERTIES EXPORT_NAME can_complete)
+add_executable(argue::can-complete ALIAS argue-can-complete)
 
-add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/argue_lint.stamp
-                   COMMAND cpplint ${argue_files}
-                   COMMAND touch ${CMAKE_CURRENT_BINARY_DIR}/argue_lint.stamp
-                   DEPENDS ${argue_files}
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-add_custom_target(argue_lint
-                  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/argue_lint.stamp)
+configure_file(libargue.pc ${CMAKE_CURRENT_BINARY_DIR}/libargue.pc @ONLY)
 
-# NOTE(josh): format before lint-check, avoid formatting lint
-add_dependencies(argue_lint argue_format)
-add_dependencies(lint argue_lint)
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/argue-config-version.cmake"
+  VERSION "${ARGUE_VERSION}"
+  COMPATIBILITY AnyNewerVersion)
+
+set(_package_location ${CMAKE_INSTALL_LIBDIR}/cmake/argue)
+
+configure_package_config_file(
+  argue-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/argue-config.cmake PATH_VARS
+  CMAKE_INSTALL_BINDIR INSTALL_DESTINATION ${_package_location})
 
 add_subdirectory(doc)
+add_subdirectory(examples)
 add_subdirectory(test)
+
+install(
+  TARGETS argue argue-shared argue-can-complete
+  EXPORT argue-targets
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+
+install(FILES ${_headers} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/argue")
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libargue.pc
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+
+install(FILES bash_completion.d/argue-argcomplete
+        DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/bash_completion.d")
+
+export(
+  EXPORT argue-targets
+  FILE "${CMAKE_CURRENT_BINARY_DIR}/argue-targets.cmake"
+  NAMESPACE "argue::")
+
+install(
+  EXPORT argue-targets
+  FILE argue-targets.cmake
+  NAMESPACE "argue::"
+  DESTINATION ${_package_location})
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/argue-config.cmake"
+              "${CMAKE_CURRENT_BINARY_DIR}/argue-config-version.cmake"
+        DESTINATION ${_package_location})

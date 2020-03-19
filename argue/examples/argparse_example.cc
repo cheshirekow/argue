@@ -59,53 +59,25 @@ int main(int argc, char** argv) {
       .add_help = true,
       .add_version = true,
       .name = "argue-demo",
-      .version = {0, 0, 1},
+      .version = argue::VersionString ARGUE_VERSION,
       .author = "Josh Bialkowski <josh.bialkowski@gmail.com>",
       .copyright = "(C) 2018",
   });
 
-// clang-format off
-#ifdef __clang__
-  parser.AddArgument("integer", &int_args, {
-    .nargs_ = "+",
-    .help_ = "an integer for the accumulator",
-    .metavar_ = "N",
-    .choices_ = {1, 2, 3, 4},
-  });
+  using namespace argue::keywords;  // NOLINT
 
-  parser.AddArgument("-s", "--sum", &accumulate, {
-    .action_ = "store_const",
-    .const_ = sum_fn,
-    .default_ = max_fn,
-    .help_ = "sum the integers (default: find the max)",
-  });
+  // clang-format off
+  parser.add_argument(
+      "integer", nargs="+", choices={1, 2, 3, 4}, dest=&int_args,  // NOLINT
+      help="an integer for the accumulator", metavar="N");         // NOLINT
 
-#else
-  parser.AddArgument("integer", &int_args, {
-    .action_ = "store",
-    .nargs_ = "+",
-    .const_ = argue::kNone,
-    .default_ = argue::kNone,
-    .choices_ = {1, 2, 3, 4},
-    .required_ = false,
-    .help_ = "an integer for the accumulator",
-    .metavar_ = "N",
-  });
-
-  parser.AddArgument("-s", "--sum", &accumulate, {
-    .action_ = "store_const",
-    .nargs_ = "",
-    .const_ = sum_fn,
-    .default_ = max_fn,
-    .choices_ = {},
-    .required_ = false,
-    .help_ = "sum the integers (default: find the max)",
-  });
-
-#endif
+  parser.add_argument(
+    "-s", "--sum", action="store_const", dest=&accumulate,  // NOLINT
+    const_=sum_fn, default_=max_fn,                         // NOLINT
+    help="sum the integers (default: find the max)");       // NOLINT
   // clang-format on
 
-  int parse_result = parser.ParseArgs(argc, argv);
+  int parse_result = parser.parse_args(argc, argv);
   switch (parse_result) {
     case argue::PARSE_ABORTED:
       return 0;
@@ -115,7 +87,7 @@ int main(int argc, char** argv) {
       break;
   }
 
-  std::cout << accumulate->GetName() << "(" << argue::Join(int_args)
+  std::cout << accumulate->GetName() << "(" << string::join(int_args)
             << ") = " << (*accumulate)(int_args) << "\n";
   return 0;
 }

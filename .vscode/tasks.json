@@ -1,0 +1,106 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ninja-clang (Release)",
+      "type": "shell",
+      "command": "waitfor",
+      "args": [
+        "--label",
+        "tangentsky",
+        "ninja",
+        "-j",
+        "3"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "options": {
+        "cwd": "${workspaceFolder}/.build/clang-host/Release-ninja-c++11"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "ninja-clang (Debug)",
+      "type": "shell",
+      "command": "waitfor",
+      "args": [
+        "--label",
+        "tangentsky",
+        "ninja",
+        "-j",
+        "3"
+      ],
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/.build/clang-host/Debug-ninja-c++11"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "ninja-clang-tests",
+      "type": "shell",
+      "command": "waitfor",
+      "args": [
+        "--label",
+        "tangentsky",
+        "ninja",
+        "-j",
+        "3",
+        "test"
+      ],
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/.build/clang-host/Release-ninja-c++11"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "ninja-gcc",
+      "type": "shell",
+      "command": "waitfor",
+      "args": [
+        "--label",
+        "tangentsky",
+        "ninja",
+        "-j",
+        "3"
+      ],
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/.build/gcc-host/Release-ninja-c++11"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "make-clang",
+      "type": "shell",
+      "command": "waitfor",
+      "args": [
+        "--label",
+        "tangentsky",
+        "make",
+        "-j",
+        "3"
+      ],
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/.build/clang-host/Release-make-c++11"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    }
+  ]
+}

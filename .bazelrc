@@ -1,0 +1,4 @@
+test --test_timeout=1,10,60,600
+test --sandbox_add_mount_pair=/dev/fuse
+build --action_env=DISPLAY --action_env=DBUS_SESSION_BUS_ADDRESS --action_env=XAUTHORITY
+

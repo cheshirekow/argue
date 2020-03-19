@@ -1,0 +1,30 @@
+dist: bionic
+
+language: cpp
+compiler:
+- clang
+- gcc
+
+before_install:
+- echo "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-8 main" |
+    sudo tee --append /etc/apt/sources.list
+- wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+- sudo add-apt-repository --no-update -y ppa://josh-bialkowski/tangent
+- sudo apt-get update
+- sudo apt-get -y install
+    $(tr '\n' ' ' < apt-requirements-bionic.txt)
+- go get $(tr '\n' ' ' < go-requirements.txt)
+- pip install -r pip-requirements.txt
+
+script:
+- mkdir build-nrd
+- cd build-nrd
+- cmake -G Ninja
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo
+  -DCMAKE_INSTALL_PREFIX=./install
+  ..
+- ninja
+- ninja install
+- ninja better-test
+- ninja lint
+

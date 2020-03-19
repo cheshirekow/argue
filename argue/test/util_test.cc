@@ -3,15 +3,15 @@
 
 #include "argue/argue.h"
 
-TEST(StringToNargsTest, CorrectlyParsesExampleQueries) {
-  EXPECT_EQ(argue::INVALID_NARGS, argue::StringToNargs("!"));
-  EXPECT_EQ(argue::ONE_OR_MORE, argue::StringToNargs("+"));
-  EXPECT_EQ(argue::ZERO_OR_MORE, argue::StringToNargs("*"));
-  EXPECT_EQ(argue::ZERO_OR_ONE, argue::StringToNargs("?"));
+TEST(string_to_nargsTest, CorrectlyParsesExampleQueries) {
+  EXPECT_EQ(argue::INVALID_NARGS, argue::string_to_nargs("!"));
+  EXPECT_EQ(argue::ONE_OR_MORE, argue::string_to_nargs("+"));
+  EXPECT_EQ(argue::ZERO_OR_MORE, argue::string_to_nargs("*"));
+  EXPECT_EQ(argue::ZERO_OR_ONE, argue::string_to_nargs("?"));
 }
 
 TEST(ArgTypeTest, CorrectlyParsesExampleQueries) {
-  EXPECT_EQ(argue::SHORT_FLAG, argue::GetArgType("-f"));
-  EXPECT_EQ(argue::LONG_FLAG, argue::GetArgType("--foo"));
-  EXPECT_EQ(argue::POSITIONAL, argue::GetArgType("foo"));
+  EXPECT_EQ(argue::SHORT_FLAG, argue::get_arg_type("-f"));
+  EXPECT_EQ(argue::LONG_FLAG, argue::get_arg_type("--foo"));
+  EXPECT_EQ(argue::POSITIONAL, argue::get_arg_type("foo"));
 }
